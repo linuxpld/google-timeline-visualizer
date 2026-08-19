@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <title>Timeline Visualizer</title>
-    <script type="module" crossorigin src="/google-timeline-visualizer/assets/index-yz-Cqfq7.js"></script>
+    <script type="module" crossorigin src="/google-timeline-visualizer/assets/index-BHB7ITfs.js"></script>
     <link rel="stylesheet" crossorigin href="/google-timeline-visualizer/assets/index-C6YZ6FXT.css">
   </head>
   <body>
@@ -88,6 +88,14 @@
             <option value="30">30 seconds</option>
             <option value="45">45 seconds</option>
             <option value="60">60 seconds</option>
+          </select>
+        </label>
+        <label>
+          Camera movement
+          <select id="camera-movement">
+            <option value="fixed">Fixed zoom</option>
+            <option value="steady" selected>Steady following</option>
+            <option value="dynamic">Dynamic following</option>
           </select>
         </label>
         <p id="selection-summary" class="status"></p>
