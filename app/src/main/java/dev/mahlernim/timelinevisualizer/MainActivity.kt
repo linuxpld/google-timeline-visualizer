@@ -1206,7 +1206,7 @@ class MainActivity : AppCompatActivity() {
         editor.exportProgress.visibility = if (exporting) View.VISIBLE else View.GONE
         editor.cancelExportButton.visibility = if (exporting) View.VISIBLE else View.GONE
         home.deleteAllVideosButton.isEnabled = !exporting
-        editor.importButton.isEnabled = !exporting
+        editor.importButton.isEnabled = !exporting && editor.loadingGroup.visibility != View.VISIBLE
         editor.playButton.isEnabled = !exporting && canCreate
         editor.exportButton.isEnabled = !exporting && canCreate
         editor.shareButton.isEnabled = !exporting
