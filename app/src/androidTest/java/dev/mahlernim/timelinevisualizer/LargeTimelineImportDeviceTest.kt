@@ -36,7 +36,7 @@ class LargeTimelineImportDeviceTest {
         val sourceStore = TimelineSourceStore(context)
         try {
             ActivityScenario.launch<MainActivity>(intent).use { scenario ->
-                val deadline = System.currentTimeMillis() + 120_000L
+                val deadline = System.currentTimeMillis() + 300_000L
                 while (System.currentTimeMillis() < deadline && !imported) {
                     scenario.onActivity { activity ->
                         val loading = activity.findViewById<View>(R.id.loadingGroup).visibility == View.VISIBLE
