@@ -12,8 +12,8 @@ enum class CameraMovement(
     val fixedZoom: Boolean,
 ) {
     FIXED(0.10, 25.0, 350.0, 2.6, 0.00060, 0.0, 0.0, false, true),
-    STEADY(0.20, 100.0, 650.0, 2.8, 0.00060, 0.025, 0.018, false, false),
-    DYNAMIC(0.05, 1.0, 250.0, 2.2, 0.00045, 0.16, 0.06, true, false),
+    STEADY(1.00, 650.0, 650.0, 2.8, 0.00060, 0.14, 0.035, false, false),
+    DYNAMIC(0.10, 100.0, 350.0, 2.2, 0.00045, 0.24, 0.06, true, false),
 }
 
 enum class LongTripCompression(val exponent: Double) {

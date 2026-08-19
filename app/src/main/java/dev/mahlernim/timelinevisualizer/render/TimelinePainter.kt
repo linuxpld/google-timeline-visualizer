@@ -140,9 +140,11 @@ class TimelinePainter {
         val contextKm = if (leg?.isTransfer == true) leg.lengthKm else proportionalContextKm
         val padding = if (leg?.isTransfer == true) TRANSFER_PADDING else movement.padding
         val rangeStartKm = leg?.startKm ?: 0.0
-        val rangeEndKm = leg?.endKm ?: journey.totalDistanceKm
+        // A local leg may look into the next transfer so the camera can prepare before it begins.
+        // Once inside a transfer, keep the target bounded to that transfer's destination.
+        val lookaheadLimitKm = if (leg?.isTransfer == true) leg.endKm else journey.totalDistanceKm
         val tailDistance = max(rangeStartKm, current.distanceKm - contextKm)
-        val lookaheadDistance = min(rangeEndKm, current.distanceKm + contextKm)
+        val lookaheadDistance = min(lookaheadLimitKm, current.distanceKm + contextKm)
         val focus = buildList {
             add(journey.positionAtDistance(tailDistance).point)
             val start = prepared.lowerBound(tailDistance)
