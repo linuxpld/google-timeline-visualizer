@@ -87,6 +87,14 @@ data class RouteSample(
     val distanceKm: Double,
 )
 
+data class JourneyLeg(
+    val startKm: Double,
+    val endKm: Double,
+    val isTransfer: Boolean,
+) {
+    val lengthKm: Double get() = endKm - startKm
+}
+
 data class Journey(
     val period: TimelinePeriod,
     val points: List<GeoPoint>,
@@ -95,9 +103,23 @@ data class Journey(
     val year: Int get() = period.startYear
     val totalDistanceKm: Double get() = cumulativeDistanceKm.lastOrNull() ?: 0.0
     val renderPath: List<RouteSample> = buildRenderPath()
+    /**
+     * A bounded, journey-specific cutoff for unusually large untracked hops. Dense local routes
+     * can recognize shorter transfers, while consistently sparse routes keep the conservative cap.
+     */
+    val transferThresholdKm: Double = calculateTransferThresholdKm()
+    val legs: List<JourneyLeg> = buildLegs()
+    private val legStartsKm = DoubleArray(legs.size) { legs[it].startKm }
 
     fun pointIndexAt(progress: Float): Int {
         return positionAt(progress).toIndex
+    }
+
+    fun legAt(distanceKm: Double): JourneyLeg {
+        if (legs.isEmpty()) return JourneyLeg(0.0, totalDistanceKm, false)
+        val found = legStartsKm.binarySearch(distanceKm.coerceIn(0.0, totalDistanceKm))
+        val index = if (found >= 0) found else -found - 2
+        return legs[index.coerceIn(0, legs.lastIndex)]
     }
 
     fun positionAt(progress: Float): JourneyPosition = positionAtDistance(
@@ -149,6 +171,39 @@ data class Journey(
                     )
                 }
             }
+        }
+    }
+
+    private fun calculateTransferThresholdKm(): Double {
+        val ordinaryCandidates = cumulativeDistanceKm
+            .asSequence()
+            .zipWithNext { before, after -> after - before }
+            .filter { it > 0.0 && it < MAX_TRANSFER_THRESHOLD_KM }
+            .sorted()
+            .toList()
+        if (ordinaryCandidates.isEmpty()) return MAX_TRANSFER_THRESHOLD_KM
+
+        val typicalHopKm = median(ordinaryCandidates)
+        val medianDeviationKm = median(ordinaryCandidates.map { kotlin.math.abs(it - typicalHopKm) }.sorted())
+        return max(
+            MIN_TRANSFER_THRESHOLD_KM,
+            max(typicalHopKm * TRANSFER_TO_TYPICAL_RATIO, typicalHopKm + medianDeviationKm * DEVIATION_MULTIPLIER),
+        ).coerceAtMost(MAX_TRANSFER_THRESHOLD_KM)
+    }
+
+    private fun buildLegs(): List<JourneyLeg> {
+        if (points.size < 2 || totalDistanceKm <= 0.0) return emptyList()
+        return buildList {
+            var localStartKm = 0.0
+            for (index in 1..points.lastIndex) {
+                val transferStartKm = cumulativeDistanceKm[index - 1]
+                val transferEndKm = cumulativeDistanceKm[index]
+                if (transferEndKm - transferStartKm < transferThresholdKm) continue
+                if (transferStartKm > localStartKm) add(JourneyLeg(localStartKm, transferStartKm, false))
+                add(JourneyLeg(transferStartKm, transferEndKm, true))
+                localStartKm = transferEndKm
+            }
+            if (totalDistanceKm > localStartKm) add(JourneyLeg(localStartKm, totalDistanceKm, false))
         }
     }
 
@@ -205,6 +260,21 @@ data class Journey(
 
         private const val MAX_RENDER_STEP_KM = 75.0
         private const val MAX_STEPS_PER_SEGMENT = 320
+        private const val MIN_TRANSFER_THRESHOLD_KM = 60.0
+        private const val MAX_TRANSFER_THRESHOLD_KM = 120.0
+        // A hop must also stand well clear of the journey's ordinary sampling pattern.
+        private const val TRANSFER_TO_TYPICAL_RATIO = 3.0
+        private const val DEVIATION_MULTIPLIER = 6.0
+
+        private fun median(sorted: List<Double>): Double {
+            if (sorted.isEmpty()) return 0.0
+            val middle = sorted.size / 2
+            return if (sorted.size % 2 == 0) {
+                (sorted[middle - 1] + sorted[middle]) / 2.0
+            } else {
+                sorted[middle]
+            }
+        }
     }
 }
 

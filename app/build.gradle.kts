@@ -34,6 +34,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".adaptive"
+            versionNameSuffix = "-adaptive-debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
