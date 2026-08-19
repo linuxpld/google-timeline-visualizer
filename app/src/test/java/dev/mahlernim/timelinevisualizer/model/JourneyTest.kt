@@ -8,11 +8,30 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.Instant
+import java.time.LocalDate
 import java.time.YearMonth
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class JourneyTest {
+    @Test
+    fun exactDateRangeIncludesOnlyPointsOnSelectedDates() {
+        val timeline = Timeline(
+            listOf(
+                GeoPoint(Instant.parse("2026-04-01T12:00:00Z"), 37.0, 127.0),
+                GeoPoint(Instant.parse("2026-04-02T12:00:00Z"), 37.1, 127.1),
+                GeoPoint(Instant.parse("2026-04-03T12:00:00Z"), 37.2, 127.2),
+                GeoPoint(Instant.parse("2026-04-04T12:00:00Z"), 37.3, 127.3),
+            ),
+        )
+
+        val journey = timeline.forDateRange(LocalDate.parse("2026-04-02"), LocalDate.parse("2026-04-03"))
+
+        assertEquals(2, journey.points.size)
+        assertEquals(Instant.parse("2026-04-02T12:00:00Z"), journey.points.first().instant)
+        assertEquals(Instant.parse("2026-04-03T12:00:00Z"), journey.points.last().instant)
+    }
+
     private val seoul = GeoPoint(Instant.parse("2025-06-01T00:00:00Z"), 37.5665, 126.9780)
     private val bohol = GeoPoint(Instant.parse("2025-06-01T04:00:00Z"), 9.8500, 124.1435)
 

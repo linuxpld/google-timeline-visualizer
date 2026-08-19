@@ -3,6 +3,7 @@ package dev.mahlernim.timelinevisualizer.model
 import java.time.Instant
 import java.time.Month
 import java.time.YearMonth
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.asin
 import kotlin.math.atan2
@@ -49,6 +50,18 @@ data class Timeline(
             month >= period.start && month <= period.endInclusive
         }.sortedBy { it.instant }
         return Journey.from(selected, period)
+    }
+
+    fun forDateRange(start: LocalDate, endInclusive: LocalDate): Journey {
+        require(endInclusive >= start)
+        val selected = points.filter {
+            val date = it.instant.atZone(ZoneId.systemDefault()).toLocalDate()
+            date >= start && date <= endInclusive
+        }.sortedBy { it.instant }
+        return Journey.from(
+            selected,
+            TimelinePeriod(YearMonth.from(start), YearMonth.from(endInclusive)),
+        )
     }
 }
 
@@ -108,18 +121,25 @@ data class Journey(
      * can recognize shorter transfers, while consistently sparse routes keep the conservative cap.
      */
     val transferThresholdKm: Double = calculateTransferThresholdKm()
-    val legs: List<JourneyLeg> = buildLegs()
-    private val legStartsKm = DoubleArray(legs.size) { legs[it].startKm }
+    val legs: List<JourneyLeg> = buildLegs(transferThresholdKm)
 
     fun pointIndexAt(progress: Float): Int {
         return positionAt(progress).toIndex
     }
 
-    fun legAt(distanceKm: Double): JourneyLeg {
-        if (legs.isEmpty()) return JourneyLeg(0.0, totalDistanceKm, false)
-        val found = legStartsKm.binarySearch(distanceKm.coerceIn(0.0, totalDistanceKm))
-        val index = if (found >= 0) found else -found - 2
-        return legs[index.coerceIn(0, legs.lastIndex)]
+    fun legsForThreshold(thresholdKm: Double): List<JourneyLeg> =
+        if (kotlin.math.abs(thresholdKm - transferThresholdKm) < 1e-9) legs else buildLegs(thresholdKm)
+
+    fun legAt(distanceKm: Double, candidates: List<JourneyLeg> = legs): JourneyLeg {
+        if (candidates.isEmpty()) return JourneyLeg(0.0, totalDistanceKm, false)
+        val target = distanceKm.coerceIn(0.0, totalDistanceKm)
+        var low = 0
+        var high = candidates.size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (candidates[middle].startKm <= target) low = middle + 1 else high = middle
+        }
+        return candidates[(low - 1).coerceIn(0, candidates.lastIndex)]
     }
 
     fun positionAt(progress: Float): JourneyPosition = positionAtDistance(
@@ -191,14 +211,14 @@ data class Journey(
         ).coerceAtMost(MAX_TRANSFER_THRESHOLD_KM)
     }
 
-    private fun buildLegs(): List<JourneyLeg> {
+    private fun buildLegs(thresholdKm: Double): List<JourneyLeg> {
         if (points.size < 2 || totalDistanceKm <= 0.0) return emptyList()
         return buildList {
             var localStartKm = 0.0
             for (index in 1..points.lastIndex) {
                 val transferStartKm = cumulativeDistanceKm[index - 1]
                 val transferEndKm = cumulativeDistanceKm[index]
-                if (transferEndKm - transferStartKm < transferThresholdKm) continue
+                if (transferEndKm - transferStartKm < thresholdKm.coerceAtLeast(1.0)) continue
                 if (transferStartKm > localStartKm) add(JourneyLeg(localStartKm, transferStartKm, false))
                 add(JourneyLeg(transferStartKm, transferEndKm, true))
                 localStartKm = transferEndKm

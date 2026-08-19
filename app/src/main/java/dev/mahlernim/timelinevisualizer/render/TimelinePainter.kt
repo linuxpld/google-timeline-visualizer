@@ -9,6 +9,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import dev.mahlernim.timelinevisualizer.model.Journey
+import dev.mahlernim.timelinevisualizer.model.JourneyLeg
 import dev.mahlernim.timelinevisualizer.model.JourneyPosition
 import dev.mahlernim.timelinevisualizer.model.WebMercator
 import dev.mahlernim.timelinevisualizer.model.WorldPoint
@@ -40,7 +41,14 @@ class TimelinePainter {
     private var cachedCameraJourney: Journey? = null
     private var cachedCameraWidth = 0
     private var cachedCameraHeight = 0
+    private var cachedCameraSettings = CameraSettings.DEFAULT
     private var cachedCameraTrack: CameraTrack? = null
+    private var cachedLegJourney: Journey? = null
+    private var cachedLegSettings = CameraSettings.DEFAULT
+    private var cachedLegs: List<JourneyLeg> = emptyList()
+    private var cachedTimingJourney: Journey? = null
+    private var cachedCompression = LongTripCompression.BALANCED
+    private var cachedTiming: JourneyTiming? = null
     private val oldTrailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(233, 0, 100)
         style = Paint.Style.STROKE
@@ -90,13 +98,27 @@ class TimelinePainter {
         color = Color.argb(220, 255, 248, 250)
     }
 
-    fun viewport(journey: Journey, progress: Float, width: Int, height: Int): Viewport {
-        return viewport(journey, TimelineFrame(progress, 0f), width, height)
+    fun viewport(
+        journey: Journey,
+        progress: Float,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings = CameraSettings.DEFAULT,
+    ): Viewport {
+        return viewport(journey, TimelineFrame(progress, 0f), width, height, cameraSettings)
     }
 
-    fun viewport(journey: Journey, frame: TimelineFrame, width: Int, height: Int): Viewport {
-        if (width <= 0 || height <= 0) return rawViewport(journey, frame.journeyProgress, width, height)
-        val journeyViewport = cameraTrack(journey, width, height).viewportAt(frame.journeyProgress)
+    fun viewport(
+        journey: Journey,
+        frame: TimelineFrame,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings = CameraSettings.DEFAULT,
+    ): Viewport {
+        if (width <= 0 || height <= 0) {
+            return rawViewport(journey, frame.journeyProgress, width, height, cameraSettings)
+        }
+        val journeyViewport = cameraTrack(journey, width, height, cameraSettings).viewportAt(frame.journeyProgress)
         if (frame.outroProgress <= 0f) return journeyViewport
         return blendViewport(
             journeyViewport,
@@ -107,12 +129,24 @@ class TimelinePainter {
         )
     }
 
-    private fun rawViewport(journey: Journey, progress: Float, width: Int, height: Int): Viewport {
+    private fun rawViewport(
+        journey: Journey,
+        progress: Float,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings,
+    ): Viewport {
         val prepared = prepare(journey)
-        val current = journey.positionAt(progress)
-        val leg = journey.legAt(current.distanceKm)
-        val contextKm = if (leg.isTransfer) leg.lengthKm else LOCAL_CONTEXT_KM
-        val padding = if (leg.isTransfer) TRANSFER_PADDING else LOCAL_PADDING
+        val current = playbackPosition(journey, progress, cameraSettings)
+        val leg = journey.legAt(current.distanceKm, cameraLegs(journey, cameraSettings))
+        val proportionalContextKm = (journey.totalDistanceKm * cameraSettings.routeContext.fraction)
+            .coerceIn(CameraSettings.MIN_LOCAL_CONTEXT_KM, CameraSettings.MAX_LOCAL_CONTEXT_KM)
+        val contextKm = if (leg.isTransfer) {
+            leg.lengthKm
+        } else {
+            min(leg.lengthKm.takeIf { it > 0.0 } ?: proportionalContextKm, proportionalContextKm)
+        }
+        val padding = if (leg.isTransfer) TRANSFER_PADDING else cameraSettings.localFraming.padding
         val tailDistance = max(leg.startKm, current.distanceKm - contextKm)
         val lookaheadDistance = min(leg.endKm, current.distanceKm + contextKm)
         val focus = buildList {
@@ -136,7 +170,7 @@ class TimelinePainter {
         val contentSpanY = max(0.00015, (ys.maxOrNull() ?: centerY) - (ys.minOrNull() ?: centerY))
         val aspect = width.toDouble() / height.coerceAtLeast(1)
         var spanY = max(contentSpanY * padding, contentSpanX * padding / aspect)
-        spanY = spanY.coerceIn(0.0003, 0.72)
+        spanY = spanY.coerceIn(cameraSettings.localFraming.minimumViewportSpan, 0.72)
         val spanX = spanY * aspect
         val minY = (centerY - spanY / 2).coerceAtLeast(0.0)
         val maxY = (centerY + spanY / 2).coerceAtMost(1.0)
@@ -148,34 +182,70 @@ class TimelinePainter {
         return Viewport(minX, maxX, minY, maxY, zoom)
     }
 
-    private fun cameraTrack(journey: Journey, width: Int, height: Int): CameraTrack {
+    private fun cameraLegs(journey: Journey, cameraSettings: CameraSettings): List<JourneyLeg> {
+        if (cachedLegJourney === journey && cachedLegSettings == cameraSettings) return cachedLegs
+        val thresholdKm = (journey.transferThresholdKm * cameraSettings.longHopSensitivity.thresholdMultiplier)
+            .coerceIn(CameraSettings.MIN_TRANSFER_THRESHOLD_KM, CameraSettings.MAX_TRANSFER_THRESHOLD_KM)
+        cachedLegJourney = journey
+        cachedLegSettings = cameraSettings
+        cachedLegs = journey.legsForThreshold(thresholdKm)
+        return cachedLegs
+    }
+
+    private fun playbackPosition(
+        journey: Journey,
+        progress: Float,
+        cameraSettings: CameraSettings,
+    ): JourneyPosition {
+        if (cachedTimingJourney !== journey || cachedCompression != cameraSettings.longTripCompression) {
+            cachedTimingJourney = journey
+            cachedCompression = cameraSettings.longTripCompression
+            cachedTiming = JourneyTiming.create(journey, cameraSettings.longTripCompression)
+        }
+        return journey.positionAtDistance(cachedTiming!!.distanceAt(progress))
+    }
+
+    private fun cameraTrack(
+        journey: Journey,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings,
+    ): CameraTrack {
         if (
             cachedCameraJourney === journey &&
             cachedCameraWidth == width &&
-            cachedCameraHeight == height
+            cachedCameraHeight == height &&
+            cachedCameraSettings == cameraSettings
         ) {
             return cachedCameraTrack!!
         }
-        val track = buildCameraTrack(journey, width, height)
+        val track = buildCameraTrack(journey, width, height, cameraSettings)
         cachedCameraJourney = journey
         cachedCameraWidth = width
         cachedCameraHeight = height
+        cachedCameraSettings = cameraSettings
         cachedCameraTrack = track
         return track
     }
 
-    private fun buildCameraTrack(journey: Journey, width: Int, height: Int): CameraTrack {
+    private fun buildCameraTrack(
+        journey: Journey,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings,
+    ): CameraTrack {
         val aspect = width.toDouble() / height.coerceAtLeast(1)
         val sampleDistanceKm = journey.totalDistanceKm / CAMERA_TRACK_SAMPLES
         val frames = ArrayList<CameraFrame>(CAMERA_TRACK_SAMPLES + 1)
         var previous: CameraFrame? = null
         for (sample in 0..CAMERA_TRACK_SAMPLES) {
             val progress = sample.toFloat() / CAMERA_TRACK_SAMPLES
-            val raw = rawViewport(journey, progress, width, height)
+            val raw = rawViewport(journey, progress, width, height, cameraSettings)
             val rawCenterX = (raw.minX + raw.maxX) / 2.0
             val rawCenterY = (raw.minY + raw.maxY) / 2.0
-            val rawSpanY = (raw.maxY - raw.minY).coerceAtLeast(MIN_VIEWPORT_SPAN)
-            val marker = WebMercator.project(journey.positionAt(progress).point)
+            val rawSpanY = (raw.maxY - raw.minY)
+                .coerceAtLeast(cameraSettings.localFraming.minimumViewportSpan)
+            val marker = WebMercator.project(playbackPosition(journey, progress, cameraSettings).point)
             val frame = if (previous == null) {
                 CameraFrame(rawCenterX, rawCenterY, rawSpanY, raw.zoom)
             } else {
@@ -184,12 +254,12 @@ class TimelinePainter {
                 val halfDistanceKm = if (rawSpanY > previous.spanY) {
                     ZOOM_OUT_HALF_DISTANCE_KM
                 } else {
-                    ZOOM_IN_HALF_DISTANCE_KM
+                    cameraSettings.zoomInSmoothness.halfDistanceKm
                 }
                 val zoomAlpha = 1.0 - 0.5.pow(sampleDistanceKm / halfDistanceKm)
                 val spanY = kotlin.math.exp(
                     lerp(ln(previous.spanY), ln(rawSpanY), zoomAlpha),
-                ).coerceIn(MIN_VIEWPORT_SPAN, MAX_VIEWPORT_SPAN)
+                ).coerceIn(cameraSettings.localFraming.minimumViewportSpan, MAX_VIEWPORT_SPAN)
                 val spanX = spanY * aspect
                 val markerX = unwrapNear(marker.x, previous.centerX)
                 var centerX = previous.centerX
@@ -343,6 +413,7 @@ class TimelinePainter {
         journey: Journey,
         progress: Float,
         title: String,
+        cameraSettings: CameraSettings = CameraSettings.DEFAULT,
         tiles: (TileId) -> Bitmap?,
     ) {
         draw(
@@ -354,6 +425,7 @@ class TimelinePainter {
             DEFAULT_JOURNEY_DURATION_SECONDS,
             title,
             RenderText.ENGLISH,
+            cameraSettings,
             tiles,
         )
     }
@@ -367,15 +439,16 @@ class TimelinePainter {
         journeyDurationSeconds: Int,
         title: String,
         renderText: RenderText = RenderText.ENGLISH,
+        cameraSettings: CameraSettings = CameraSettings.DEFAULT,
         tiles: (TileId) -> Bitmap?,
     ) {
         if (journey.points.isEmpty() || width <= 0 || height <= 0) return
-        val viewport = viewport(journey, frame, width, height)
+        val viewport = viewport(journey, frame, width, height, cameraSettings)
         val prepared = prepare(journey)
         drawBackground(canvas, width, height)
         drawTiles(canvas, width, height, viewport, tiles)
 
-        val current = journey.positionAt(frame.journeyProgress)
+        val current = playbackPosition(journey, frame.journeyProgress, cameraSettings)
         val currentScreen = screenPoint(current, prepared, viewport, width, height)
         val trailWindow = trailWindowDistance(journey, journeyDurationSeconds)
         val trailStart = max(0.0, current.distanceKm - trailWindow)
@@ -669,8 +742,6 @@ class TimelinePainter {
     }
 
     companion object {
-        private const val LOCAL_CONTEXT_KM = 25.0
-        private const val LOCAL_PADDING = 1.8
         private const val TRANSFER_PADDING = 2.8
         private const val DEFAULT_JOURNEY_DURATION_SECONDS = 30
         private const val TRAIL_VISIBLE_SECONDS = 2.5
@@ -686,7 +757,6 @@ class TimelinePainter {
         private const val CAMERA_TRACK_SAMPLES = 480
         private const val CAMERA_DEAD_ZONE_HALF = 0.20
         private const val ZOOM_OUT_HALF_DISTANCE_KM = 18.0
-        private const val ZOOM_IN_HALF_DISTANCE_KM = 35.0
         private const val TILE_ZOOM_HYSTERESIS = 0.15
         private const val MIN_VIEWPORT_SPAN = 0.0003
         private const val MAX_VIEWPORT_SPAN = 0.72

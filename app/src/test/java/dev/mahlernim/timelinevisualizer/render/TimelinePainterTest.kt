@@ -18,6 +18,29 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TimelinePainterTest {
     @Test
+    fun widerLocalFramingProducesAWiderViewportAndInvalidatesTheCameraCache() {
+        val journey = Journey.from(
+            listOf(
+                point(37.50, 126.90),
+                point(37.55, 126.95),
+                point(37.60, 127.00),
+            ),
+            2025,
+        )
+        val detailed = CameraSettings(
+            localFraming = LocalFraming.DETAILED,
+            longTripCompression = LongTripCompression.OFF,
+        )
+        val wide = detailed.copy(localFraming = LocalFraming.WIDE)
+        val painter = TimelinePainter()
+
+        val detailedViewport = painter.viewport(journey, 0.5f, SIZE, SIZE, detailed)
+        val wideViewport = painter.viewport(journey, 0.5f, SIZE, SIZE, wide)
+
+        assertTrue(wideViewport.maxY - wideViewport.minY > detailedViewport.maxY - detailedViewport.minY)
+    }
+
+    @Test
     fun routeStartsEmptyAndAppearsOnlyAsJourneyAdvances() {
         val points = listOf(
             GeoPoint(Instant.parse("2025-01-01T00:00:00Z"), 37.45, 126.75),

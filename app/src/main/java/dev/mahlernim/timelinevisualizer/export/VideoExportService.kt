@@ -108,6 +108,7 @@ class VideoExportService : Service() {
                 request.title,
                 request.durationSeconds,
                 request.renderText,
+                request.cameraSettings,
             ) { progress ->
                 val snapshot = VideoExportSnapshot(
                     status = VideoExportStatus.RUNNING,

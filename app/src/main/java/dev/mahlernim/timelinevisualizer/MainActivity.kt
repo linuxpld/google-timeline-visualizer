@@ -31,6 +31,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.datepicker.MaterialDatePicker
 import com.google.android.material.snackbar.Snackbar
 import dev.mahlernim.timelinevisualizer.data.TimelineParser
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
@@ -52,6 +53,14 @@ import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.model.TitleTemplate
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.RenderText
+import dev.mahlernim.timelinevisualizer.render.CameraSettings
+import dev.mahlernim.timelinevisualizer.render.LocalFraming
+import dev.mahlernim.timelinevisualizer.render.LongHopSensitivity
+import dev.mahlernim.timelinevisualizer.render.LongTripCompression
+import dev.mahlernim.timelinevisualizer.render.RouteContext
+import dev.mahlernim.timelinevisualizer.render.VideoQuality
+import dev.mahlernim.timelinevisualizer.render.ZoomInSmoothness
+import dev.mahlernim.timelinevisualizer.ui.CameraSettingsPreferences
 import dev.mahlernim.timelinevisualizer.videos.GeneratedMediaRepository
 import dev.mahlernim.timelinevisualizer.videos.VideoMedia
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
@@ -67,6 +76,12 @@ import java.text.NumberFormat
 import java.util.Date
 import java.util.Locale
 import java.time.YearMonth
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import androidx.core.util.Pair as AndroidPair
 import kotlin.math.ceil
 
 class MainActivity : AppCompatActivity() {
@@ -86,6 +101,9 @@ class MainActivity : AppCompatActivity() {
     private var selectedEndYear: Int? = null
     private var selectedStartMonth = 1
     private var selectedEndMonth = 12
+    private var exactDateRangeEnabled = false
+    private var selectedStartDate: LocalDate? = null
+    private var selectedEndDate: LocalDate? = null
     private val titleHandler = Handler(Looper.getMainLooper())
     private val monthNames by lazy { DateFormatSymbols.getInstance().months.take(12) }
     private val preferences by lazy { getSharedPreferences("display", MODE_PRIVATE) }
@@ -93,6 +111,8 @@ class MainActivity : AppCompatActivity() {
     private val videoMedia by lazy { VideoMedia(applicationContext) }
     private val generatedMedia by lazy { GeneratedMediaRepository(applicationContext) }
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
+    private val cameraSettingsPreferences by lazy { CameraSettingsPreferences(applicationContext) }
+    private var cameraSettings = CameraSettings.DEFAULT
     private val applyTitleChanges = Runnable { commitTitlePreferences() }
     private var videoRenderGeneration = 0
     private var videosExpanded = false
@@ -211,7 +231,9 @@ class MainActivity : AppCompatActivity() {
             showProgress(editor.timelineSeek.progress / 1000f)
         }
         makeDropdownOpenReliably(editor.durationDropdown)
+        configureAdvancedSettings()
         configureMonthDropdowns()
+        configureExactDates()
         renderVideos()
         lifecycleScope.launch(Dispatchers.IO) { videoMedia.pruneOverviewCache() }
         VideoExportCoordinator.restore(applicationContext)
@@ -369,6 +391,11 @@ class MainActivity : AppCompatActivity() {
         }
         selectedStartYear = years.first()
         selectedEndYear = years.first()
+        exactDateRangeEnabled = false
+        selectedStartDate = null
+        selectedEndDate = null
+        editor.exactDateSwitch.isChecked = false
+        updateExactDateControls()
         updateYearDropdowns()
         updateResolvedTitle()
         selectRange()
@@ -376,7 +403,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun selectRange() {
         val period = currentPeriod() ?: return
-        val selected = timeline?.forRange(period) ?: return
+        val selected = if (exactDateRangeEnabled) {
+            val start = selectedStartDate ?: return
+            val end = selectedEndDate ?: return
+            timeline?.forDateRange(start, end)
+        } else {
+            timeline?.forRange(period)
+        } ?: return
         animation?.cancel()
         journey = selected
         editor.timelineView.journey = selected
@@ -397,7 +430,13 @@ class MainActivity : AppCompatActivity() {
             return getString(R.string.selected_period_no_movement, number.format(selected.points.size))
         }
         val range = selected.period
-        val period = if (
+        val period = if (exactDateRangeEnabled && selectedStartDate != null && selectedEndDate != null) {
+            getString(
+                R.string.exact_date_range,
+                formatExactDate(selectedStartDate!!),
+                formatExactDate(selectedEndDate!!),
+            )
+        } else if (
             range.startYear == range.endYear &&
             range.startMonth == 1 &&
             range.endMonth == 12
@@ -448,6 +487,73 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun configureExactDates() {
+        editor.exactDateSwitch.setOnCheckedChangeListener { _, checked ->
+            exactDateRangeEnabled = checked
+            if (checked && (selectedStartDate == null || selectedEndDate == null)) {
+                resetExactDatesToSelectedMonths()
+            }
+            updateExactDateControls()
+            updateResolvedTitle()
+            selectRange()
+        }
+        editor.exactDateRangeButton.setOnClickListener { showExactDatePicker() }
+        updateExactDateControls()
+    }
+
+    private fun showExactDatePicker() {
+        val start = selectedStartDate ?: currentPeriod()?.start?.atDay(1) ?: return
+        val end = selectedEndDate ?: currentPeriod()?.endInclusive?.atEndOfMonth() ?: return
+        val picker = MaterialDatePicker.Builder.dateRangePicker()
+            .setTitleText(R.string.choose_exact_dates)
+            .setSelection(AndroidPair(datePickerMillis(start), datePickerMillis(end)))
+            .build()
+        picker.addOnPositiveButtonClickListener { range ->
+            val pickedStart = Instant.ofEpochMilli(range.first).atZone(ZoneOffset.UTC).toLocalDate()
+            val pickedEnd = Instant.ofEpochMilli(range.second).atZone(ZoneOffset.UTC).toLocalDate()
+            selectedStartDate = pickedStart
+            selectedEndDate = pickedEnd
+            selectedStartYear = pickedStart.year
+            selectedEndYear = pickedEnd.year
+            selectedStartMonth = pickedStart.monthValue
+            selectedEndMonth = pickedEnd.monthValue
+            updateYearDropdowns()
+            editor.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
+            editor.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
+            updateExactDateControls()
+            updateResolvedTitle()
+            selectRange()
+        }
+        picker.show(supportFragmentManager, "exact-date-range")
+    }
+
+    private fun resetExactDatesToSelectedMonths() {
+        val period = currentPeriod() ?: return
+        selectedStartDate = period.start.atDay(1)
+        selectedEndDate = period.endInclusive.atEndOfMonth()
+    }
+
+    private fun updateExactDateControls() {
+        editor.exactDateRangeButton.visibility = if (exactDateRangeEnabled) View.VISIBLE else View.GONE
+        val start = selectedStartDate
+        val end = selectedEndDate
+        editor.exactDateRangeButton.text = if (start != null && end != null) {
+            getString(R.string.exact_date_range, formatExactDate(start), formatExactDate(end))
+        } else {
+            getString(R.string.choose_exact_dates)
+        }
+    }
+
+    private fun formatExactDate(date: LocalDate): String = DateTimeFormatter
+        .ofLocalizedDate(FormatStyle.MEDIUM)
+        .withLocale(resources.configuration.locales[0])
+        .format(date)
+
+    private fun datePickerMillis(date: LocalDate): Long = date
+        .atStartOfDay(ZoneOffset.UTC)
+        .toInstant()
+        .toEpochMilli()
+
     private fun normalizeRange(changedStart: Boolean) {
         val startYear = selectedStartYear ?: return
         val endYear = selectedEndYear ?: return
@@ -464,6 +570,10 @@ class MainActivity : AppCompatActivity() {
             updateYearDropdowns()
             editor.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
             editor.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
+        }
+        if (exactDateRangeEnabled) {
+            resetExactDatesToSelectedMonths()
+            updateExactDateControls()
         }
         updateResolvedTitle()
         selectRange()
@@ -531,6 +641,133 @@ class MainActivity : AppCompatActivity() {
         editor.timelineView.progress = progress
     }
 
+    private fun configureAdvancedSettings() {
+        val routeLabels = listOf(
+            R.string.route_context_compact,
+            R.string.route_context_balanced,
+            R.string.route_context_generous,
+            R.string.route_context_maximum,
+        ).map(::getString)
+        val framingLabels = listOf(
+            R.string.framing_detailed,
+            R.string.framing_balanced,
+            R.string.framing_wide,
+        ).map(::getString)
+        val zoomLabels = listOf(
+            R.string.zoom_quick,
+            R.string.zoom_gentle,
+            R.string.zoom_cinematic,
+        ).map(::getString)
+        val hopLabels = listOf(
+            R.string.hop_more_sensitive,
+            R.string.hop_automatic,
+            R.string.hop_less_sensitive,
+        ).map(::getString)
+        val compressionLabels = listOf(
+            R.string.compression_off,
+            R.string.compression_gentle,
+            R.string.compression_balanced,
+            R.string.compression_strong,
+        ).map(::getString)
+        val qualityLabels = listOf(
+            R.string.quality_standard,
+            R.string.quality_high,
+            R.string.quality_ultra,
+        ).map(::getString)
+
+        listOf(
+            editor.routeContextDropdown to routeLabels,
+            editor.localFramingDropdown to framingLabels,
+            editor.zoomInDropdown to zoomLabels,
+            editor.longHopDropdown to hopLabels,
+            editor.longTripDropdown to compressionLabels,
+            editor.videoQualityDropdown to qualityLabels,
+        ).forEach { (dropdown, labels) ->
+            dropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
+            makeDropdownOpenReliably(dropdown)
+        }
+
+        editor.routeContextDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(routeContext = RouteContext.values()[position]))
+        }
+        editor.localFramingDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(localFraming = LocalFraming.values()[position]))
+        }
+        editor.zoomInDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(zoomInSmoothness = ZoomInSmoothness.values()[position]))
+        }
+        editor.longHopDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(longHopSensitivity = LongHopSensitivity.values()[position]))
+        }
+        editor.longTripDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(longTripCompression = LongTripCompression.values()[position]))
+        }
+        editor.videoQualityDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(videoQuality = VideoQuality.values()[position]))
+        }
+        editor.advancedSettingsButton.setOnClickListener {
+            val expanding = editor.advancedSettingsGroup.visibility != View.VISIBLE
+            editor.advancedSettingsGroup.visibility = if (expanding) View.VISIBLE else View.GONE
+            editor.advancedSettingsButton.setIconResource(
+                if (expanding) R.drawable.ic_expand_less_24 else R.drawable.ic_expand_more_24,
+            )
+        }
+        editor.resetAdvancedSettingsButton.setOnClickListener {
+            applyAdvancedSettings(cameraSettingsPreferences.reset())
+            Snackbar.make(binding.root, R.string.advanced_defaults_restored, Snackbar.LENGTH_SHORT).show()
+        }
+        applyAdvancedSettings(cameraSettingsPreferences.load())
+    }
+
+    private fun updateAdvancedSettings(settings: CameraSettings) {
+        cameraSettingsPreferences.save(settings)
+        applyAdvancedSettings(settings)
+    }
+
+    private fun applyAdvancedSettings(settings: CameraSettings) {
+        cameraSettings = settings
+        editor.timelineView.cameraSettings = settings
+        editor.routeContextDropdown.setText(
+            getString(
+                listOf(
+                    R.string.route_context_compact,
+                    R.string.route_context_balanced,
+                    R.string.route_context_generous,
+                    R.string.route_context_maximum,
+                )[settings.routeContext.ordinal],
+            ),
+            false,
+        )
+        editor.localFramingDropdown.setText(
+            getString(listOf(R.string.framing_detailed, R.string.framing_balanced, R.string.framing_wide)[settings.localFraming.ordinal]),
+            false,
+        )
+        editor.zoomInDropdown.setText(
+            getString(listOf(R.string.zoom_quick, R.string.zoom_gentle, R.string.zoom_cinematic)[settings.zoomInSmoothness.ordinal]),
+            false,
+        )
+        editor.longHopDropdown.setText(
+            getString(listOf(R.string.hop_more_sensitive, R.string.hop_automatic, R.string.hop_less_sensitive)[settings.longHopSensitivity.ordinal]),
+            false,
+        )
+        editor.longTripDropdown.setText(
+            getString(
+                listOf(
+                    R.string.compression_off,
+                    R.string.compression_gentle,
+                    R.string.compression_balanced,
+                    R.string.compression_strong,
+                )[settings.longTripCompression.ordinal],
+            ),
+            false,
+        )
+        editor.videoQualityDropdown.setText(
+            getString(listOf(R.string.quality_standard, R.string.quality_high, R.string.quality_ultra)[settings.videoQuality.ordinal]),
+            false,
+        )
+        showProgress(editor.timelineSeek.progress / 1000f)
+    }
+
     private fun chooseExportDestination() {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -563,6 +800,7 @@ class MainActivity : AppCompatActivity() {
             title = title,
             durationSeconds = selectedDurationSeconds(),
             renderText = currentRenderText(),
+            cameraSettings = cameraSettings,
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val request = pendingExport ?: return
@@ -713,8 +951,18 @@ class MainActivity : AppCompatActivity() {
         editor.durationDropdown.isEnabled = !exporting
         editor.startMonthDropdown.isEnabled = !exporting
         editor.endMonthDropdown.isEnabled = !exporting
+        editor.exactDateSwitch.isEnabled = !exporting
+        editor.exactDateRangeButton.isEnabled = !exporting
         editor.ownerInput.isEnabled = !exporting
         editor.titleInput.isEnabled = !exporting
+        editor.advancedSettingsButton.isEnabled = !exporting
+        editor.routeContextDropdown.isEnabled = !exporting
+        editor.localFramingDropdown.isEnabled = !exporting
+        editor.zoomInDropdown.isEnabled = !exporting
+        editor.longHopDropdown.isEnabled = !exporting
+        editor.longTripDropdown.isEnabled = !exporting
+        editor.videoQualityDropdown.isEnabled = !exporting
+        editor.resetAdvancedSettingsButton.isEnabled = !exporting
         if (exporting) editor.videoReadyGroup.visibility = View.GONE
     }
 

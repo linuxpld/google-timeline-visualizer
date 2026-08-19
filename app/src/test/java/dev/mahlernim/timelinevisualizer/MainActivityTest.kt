@@ -50,6 +50,7 @@ class MainActivityTest {
         VideoExportStateStore(context).clear()
         VideoExportCoordinator.resetForTest()
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("camera-settings", Context.MODE_PRIVATE).edit().clear().commit()
         timelineSourceStore.clearForTest()
     }
 
@@ -215,6 +216,38 @@ class MainActivityTest {
             },
             values,
         )
+    }
+
+    @Test
+    fun advancedSettingsStartCollapsedWithTheRequestedDefaults() {
+        val activity = launchActivity()
+        val group = activity.findViewById<View>(R.id.advancedSettingsGroup)
+
+        assertEquals(View.GONE, group.visibility)
+        activity.findViewById<View>(R.id.advancedSettingsButton).performClick()
+        assertEquals(View.VISIBLE, group.visibility)
+        assertEquals(
+            activity.getString(R.string.route_context_balanced),
+            activity.findViewById<AutoCompleteTextView>(R.id.routeContextDropdown).text.toString(),
+        )
+        assertEquals(
+            activity.getString(R.string.compression_balanced),
+            activity.findViewById<AutoCompleteTextView>(R.id.longTripDropdown).text.toString(),
+        )
+        assertEquals(
+            activity.getString(R.string.quality_standard),
+            activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown).text.toString(),
+        )
+    }
+
+    @Test
+    fun exactDateRangeIsOptionalAndRevealsItsSelector() {
+        val activity = launchActivity()
+        val button = activity.findViewById<View>(R.id.exactDateRangeButton)
+
+        assertEquals(View.GONE, button.visibility)
+        activity.findViewById<View>(R.id.exactDateSwitch).performClick()
+        assertEquals(View.VISIBLE, button.visibility)
     }
 
     @Test
