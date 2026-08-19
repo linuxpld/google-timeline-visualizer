@@ -76,7 +76,7 @@ class LargeTimelineImportDeviceTest {
                 if (!firstSegment) writer.write(','.code)
                 firstSegment = false
                 writer.write("{\"startTime\":\"2020-01-01T00:00:00Z\",\"timelinePath\":[")
-                repeat(20) { offset ->
+                repeat(10) { offset ->
                     if (offset > 0) writer.write(','.code)
                     val latitude = 35.0 + (pointIndex % 100_000) / 1_000_000.0
                     val longitude = 126.0 + (pointIndex % 100_000) / 1_000_000.0
@@ -86,7 +86,9 @@ class LargeTimelineImportDeviceTest {
                     )
                     pointIndex += 1
                 }
-                writer.write("]}")
+                writer.write("],\"testPadding\":\"")
+                repeat(3_072) { writer.write('x'.code) }
+                writer.write("\"}")
                 segmentCount += 1
                 if (segmentCount % 100 == 0) {
                     writer.flush()
