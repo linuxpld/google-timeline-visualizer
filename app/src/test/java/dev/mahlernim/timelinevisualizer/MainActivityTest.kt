@@ -219,13 +219,10 @@ class MainActivityTest {
     }
 
     @Test
-    fun advancedSettingsStartCollapsedWithTheRequestedDefaults() {
+    fun settingsShowTheRequestedVideoDefaults() {
         val activity = launchActivity()
-        val group = activity.findViewById<View>(R.id.advancedSettingsGroup)
-
-        assertEquals(View.GONE, group.visibility)
-        activity.findViewById<View>(R.id.advancedSettingsButton).performClick()
-        assertEquals(View.VISIBLE, group.visibility)
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsScreen).visibility)
         assertEquals(
             activity.getString(R.string.camera_steady),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
@@ -283,7 +280,7 @@ class MainActivityTest {
 
         val activity = launchActivity()
         assertEquals(missing, timelineSourceStore.load())
-        activity.findViewById<View>(R.id.createVideoButton).performClick()
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
         waitUntil { timelineSourceStore.load() == null }
 
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
@@ -307,6 +304,30 @@ class MainActivityTest {
     fun compactJapaneseButtonsRemainSingleLine() = assertCompactButtons()
 
     @Test
+    @Config(sdk = [35], qualifiers = "zh-rCN-w360dp-h640dp-xxhdpi")
+    fun compactSimplifiedChineseButtonsRemainSingleLine() = assertCompactButtons()
+
+    @Test
+    @Config(sdk = [35], qualifiers = "zh-rTW-w360dp-h640dp-xxhdpi")
+    fun compactTraditionalChineseButtonsRemainSingleLine() = assertCompactButtons()
+
+    @Test
+    @Config(sdk = [35], qualifiers = "es-w360dp-h640dp-xxhdpi")
+    fun compactSpanishButtonsRemainSingleLine() = assertCompactButtons()
+
+    @Test
+    @Config(sdk = [35], qualifiers = "fr-w360dp-h640dp-xxhdpi")
+    fun compactFrenchButtonsRemainSingleLine() = assertCompactButtons()
+
+    @Test
+    @Config(sdk = [35], qualifiers = "de-w360dp-h640dp-xxhdpi")
+    fun compactGermanButtonsRemainSingleLine() = assertCompactButtons()
+
+    @Test
+    @Config(sdk = [35], qualifiers = "pt-rBR-w360dp-h640dp-xxhdpi")
+    fun compactBrazilianPortugueseButtonsRemainSingleLine() = assertCompactButtons()
+
+    @Test
     fun normalLaunchOpensVideosAndDefersRememberedTimeline() {
         val remembered = Uri.fromFile(File(context.cacheDir, "missing-deferred.json"))
         assertTrue(timelineSourceStore.replace(remembered))
@@ -322,7 +343,7 @@ class MainActivityTest {
     @Test
     fun backFromNewVideoReturnsToVideosWithoutCancellingExport() {
         val activity = launchActivity()
-        activity.findViewById<View>(R.id.createVideoButton).performClick()
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
         VideoExportCoordinator.publish(
             context,
             VideoExportSnapshot(status = VideoExportStatus.RUNNING, startedAtMillis = 123L),
@@ -334,6 +355,20 @@ class MainActivityTest {
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.homeExportGroup).visibility)
         assertEquals(VideoExportStatus.RUNNING, VideoExportStateStore(context).load().status)
+    }
+
+    @Test
+    fun switchingTabsPreservesTheUnfinishedCreateDraft() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+        activity.findViewById<TextView>(R.id.ownerInput).text = "Mina"
+        activity.findViewById<TextView>(R.id.titleInput).text = "{name}'s weekend"
+
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+
+        assertEquals("Mina", activity.findViewById<TextView>(R.id.ownerInput).text.toString())
+        assertEquals("{name}'s weekend", activity.findViewById<TextView>(R.id.titleInput).text.toString())
     }
 
     @Test
@@ -371,6 +406,26 @@ class MainActivityTest {
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
     }
 
+    @Test
+    fun playbackIntentOpensTheInternalPlayerRoute() {
+        val uri = Uri.parse("content://example/video/internal")
+        val intent = MainActivity.playbackIntent(context, uri)
+
+        assertEquals(MainActivity.ACTION_WATCH_VIDEO, intent.action)
+        assertEquals(uri, intent.data)
+        assertEquals(MainActivity::class.java.name, intent.component?.className)
+    }
+
+    @Test
+    fun playbackIntentDisplaysTheFullScreenInternalPlayer() {
+        val uri = Uri.parse("content://example/video/internal")
+        val activity = launchActivity(MainActivity.playbackIntent(context, uri))
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.playerScreen).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.bottomNavigation).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.videosScreen).visibility)
+    }
+
     private fun acceptPrivacyDisclosure() {
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit()
             .putBoolean("map_privacy_accepted_v1", true)
@@ -381,13 +436,15 @@ class MainActivityTest {
         val activity = launchActivity()
         measureActivity(activity)
         assertSingleLineButtons(activity.window.decorView)
-        activity.findViewById<View>(R.id.createVideoButton).performClick()
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
         measureActivity(activity)
         assertSingleLineButtons(activity.findViewById(R.id.newVideoScreen))
-        assertEquals(
-            activity.getString(R.string.back_to_videos),
-            activity.findViewById<View>(R.id.backButton).contentDescription,
-        )
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+        measureActivity(activity)
+        assertSingleLineButtons(activity.findViewById(R.id.settingsScreen))
+        controller.newIntent(MainActivity.playbackIntent(context, Uri.parse("content://example/video/layout")))
+        measureActivity(activity)
+        assertSingleLineButtons(activity.findViewById(R.id.playerScreen))
     }
 
     private fun measureActivity(activity: MainActivity) {

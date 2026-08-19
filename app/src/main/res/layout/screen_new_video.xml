@@ -20,22 +20,11 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/backButton"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/back_to_videos"
-                android:maxLines="1"
-                android:minWidth="48dp"
-                android:text="@string/back" />
-
             <TextView
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:maxLines="1"
-                android:text="@string/new_video"
+                android:text="@string/create_video"
                 android:textAppearance="?attr/textAppearanceHeadlineSmall"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -178,6 +167,7 @@
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:maxLines="1"
                 android:text="@string/choose_exact_dates"
                 android:visibility="gone" />
 
@@ -194,41 +184,6 @@
             <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:hint="@string/video_title_template" app:helperText="@string/title_template_help">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/titleInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLength="80" android:singleLine="true" android:text="@string/default_title_template" />
             </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/advancedSettingsButton"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:gravity="start|center_vertical"
-                android:text="@string/advanced_settings"
-                app:icon="@drawable/ic_expand_more_24"
-                app:iconGravity="textEnd" />
-
-            <LinearLayout
-                android:id="@+id/advancedSettingsGroup"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:text="@string/advanced_settings_summary" android:textAppearance="?attr/textAppearanceBodySmall" />
-
-                <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="@string/camera_movement">
-                    <AutoCompleteTextView android:id="@+id/cameraMovementDropdown" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="none" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="@string/long_trip_compression">
-                    <AutoCompleteTextView android:id="@+id/longTripDropdown" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="none" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="@string/video_quality">
-                    <AutoCompleteTextView android:id="@+id/videoQualityDropdown" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="none" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.button.MaterialButton android:id="@+id/resetAdvancedSettingsButton" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/restore_advanced_defaults" />
-            </LinearLayout>
 
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:maxLines="1" android:text="@string/journey" android:textAppearance="?attr/textAppearanceTitleMedium" android:textStyle="bold" />
 
