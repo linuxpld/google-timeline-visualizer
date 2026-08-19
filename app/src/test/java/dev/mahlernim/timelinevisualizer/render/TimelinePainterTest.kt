@@ -7,6 +7,7 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import java.time.Instant
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -18,7 +19,7 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TimelinePainterTest {
     @Test
-    fun widerLocalFramingProducesAWiderViewportAndInvalidatesTheCameraCache() {
+    fun fixedCameraKeepsTheSameZoomSpanAcrossTheJourney() {
         val journey = Journey.from(
             listOf(
                 point(37.50, 126.90),
@@ -27,17 +28,17 @@ class TimelinePainterTest {
             ),
             2025,
         )
-        val detailed = CameraSettings(
-            localFraming = LocalFraming.DETAILED,
+        val fixed = CameraSettings(
+            cameraMovement = CameraMovement.FIXED,
             longTripCompression = LongTripCompression.OFF,
         )
-        val wide = detailed.copy(localFraming = LocalFraming.WIDE)
         val painter = TimelinePainter()
+        val spans = listOf(0f, 0.2f, 0.5f, 0.8f, 1f).map { progress ->
+            val viewport = painter.viewport(journey, progress, SIZE, SIZE, fixed)
+            viewport.maxY - viewport.minY
+        }
 
-        val detailedViewport = painter.viewport(journey, 0.5f, SIZE, SIZE, detailed)
-        val wideViewport = painter.viewport(journey, 0.5f, SIZE, SIZE, wide)
-
-        assertTrue(wideViewport.maxY - wideViewport.minY > detailedViewport.maxY - detailedViewport.minY)
+        spans.forEach { assertEquals(spans.first(), it, 1e-12) }
     }
 
     @Test

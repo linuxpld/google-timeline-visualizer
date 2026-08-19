@@ -3,12 +3,9 @@ package dev.mahlernim.timelinevisualizer.ui
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
-import dev.mahlernim.timelinevisualizer.render.LocalFraming
-import dev.mahlernim.timelinevisualizer.render.LongHopSensitivity
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
 import dev.mahlernim.timelinevisualizer.render.LongTripCompression
-import dev.mahlernim.timelinevisualizer.render.RouteContext
 import dev.mahlernim.timelinevisualizer.render.VideoQuality
-import dev.mahlernim.timelinevisualizer.render.ZoomInSmoothness
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.After
@@ -36,10 +33,7 @@ class CameraSettingsPreferencesTest {
     @Test
     fun savesAndRestoresAllAdvancedSettings() {
         val expected = CameraSettings(
-            routeContext = RouteContext.MAXIMUM,
-            localFraming = LocalFraming.WIDE,
-            zoomInSmoothness = ZoomInSmoothness.CINEMATIC,
-            longHopSensitivity = LongHopSensitivity.LESS_SENSITIVE,
+            cameraMovement = CameraMovement.FIXED,
             longTripCompression = LongTripCompression.STRONG,
             videoQuality = VideoQuality.ULTRA,
         )
@@ -52,6 +46,7 @@ class CameraSettingsPreferencesTest {
     @Test
     fun defaultsMatchTheAdvancedPanelDefaults() {
         assertEquals(CameraSettings.DEFAULT, preferences.load())
+        assertEquals(CameraMovement.STEADY, preferences.load().cameraMovement)
         assertEquals(LongTripCompression.BALANCED, preferences.load().longTripCompression)
         assertEquals(VideoQuality.STANDARD, preferences.load().videoQuality)
     }

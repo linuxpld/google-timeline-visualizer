@@ -36,7 +36,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".adaptive"
-            versionNameSuffix = "-adaptive-debug"
+            versionNameSuffix = "-camera-test-2-debug"
         }
         release {
             isMinifyEnabled = true

@@ -1,6 +1,9 @@
 package dev.mahlernim.timelinevisualizer.model
 
 import dev.mahlernim.timelinevisualizer.render.TimelinePainter
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
+import dev.mahlernim.timelinevisualizer.render.CameraSettings
+import dev.mahlernim.timelinevisualizer.render.LongTripCompression
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -91,10 +94,20 @@ class JourneyTest {
         val arrival = compactCityPoints(centerLongitude = 1.1, count = 31, startHour = departure.size)
         val journey = Journey.from(departure + arrival, 2025)
         val painter = TimelinePainter()
+        val settings = CameraSettings(
+            cameraMovement = CameraMovement.DYNAMIC,
+            longTripCompression = LongTripCompression.OFF,
+        )
         val arrivalStartKm = journey.legs.last().startKm
         val localWidthsKm = (0..100).map { sample ->
             val distanceKm = arrivalStartKm + journey.legs.last().lengthKm * sample / 100.0
-            val viewport = painter.viewport(journey, (distanceKm / journey.totalDistanceKm).toFloat(), 480, 480)
+            val viewport = painter.viewport(
+                journey,
+                (distanceKm / journey.totalDistanceKm).toFloat(),
+                480,
+                480,
+                settings,
+            )
             (viewport.maxX - viewport.minX) * EQUATOR_KM
         }
 

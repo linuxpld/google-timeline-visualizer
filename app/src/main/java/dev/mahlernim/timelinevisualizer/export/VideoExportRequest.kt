@@ -6,12 +6,9 @@ import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.render.RenderText
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
-import dev.mahlernim.timelinevisualizer.render.LocalFraming
-import dev.mahlernim.timelinevisualizer.render.LongHopSensitivity
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
 import dev.mahlernim.timelinevisualizer.render.LongTripCompression
-import dev.mahlernim.timelinevisualizer.render.RouteContext
 import dev.mahlernim.timelinevisualizer.render.VideoQuality
-import dev.mahlernim.timelinevisualizer.render.ZoomInSmoothness
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -48,10 +45,7 @@ class VideoExportRequestStore(context: Context) {
             output.writeUTF(request.renderText.datePattern)
             output.writeUTF(request.renderText.distanceUnit)
             output.writeUTF(request.renderText.attribution)
-            output.writeUTF(request.cameraSettings.routeContext.name)
-            output.writeUTF(request.cameraSettings.localFraming.name)
-            output.writeUTF(request.cameraSettings.zoomInSmoothness.name)
-            output.writeUTF(request.cameraSettings.longHopSensitivity.name)
+            output.writeUTF(request.cameraSettings.cameraMovement.name)
             output.writeUTF(request.cameraSettings.longTripCompression.name)
             output.writeUTF(request.cameraSettings.videoQuality.name)
             output.writeInt(request.journey.points.size)
@@ -98,12 +92,16 @@ class VideoExportRequestStore(context: Context) {
                         distanceUnit = input.readUTF(),
                         attribution = input.readUTF(),
                     )
-                    cameraSettings = if (version >= 3) {
+                    cameraSettings = if (version >= 4) {
                         CameraSettings(
-                            routeContext = enumOrDefault(input.readUTF(), RouteContext.BALANCED),
-                            localFraming = enumOrDefault(input.readUTF(), LocalFraming.BALANCED),
-                            zoomInSmoothness = enumOrDefault(input.readUTF(), ZoomInSmoothness.GENTLE),
-                            longHopSensitivity = enumOrDefault(input.readUTF(), LongHopSensitivity.AUTOMATIC),
+                            cameraMovement = enumOrDefault(input.readUTF(), CameraMovement.STEADY),
+                            longTripCompression = enumOrDefault(input.readUTF(), LongTripCompression.BALANCED),
+                            videoQuality = enumOrDefault(input.readUTF(), VideoQuality.STANDARD),
+                        )
+                    } else if (version == 3) {
+                        repeat(4) { input.readUTF() }
+                        CameraSettings(
+                            cameraMovement = CameraMovement.STEADY,
                             longTripCompression = enumOrDefault(input.readUTF(), LongTripCompression.BALANCED),
                             videoQuality = enumOrDefault(input.readUTF(), VideoQuality.STANDARD),
                         )
@@ -144,7 +142,7 @@ class VideoExportRequestStore(context: Context) {
     }
 
     companion object {
-        private const val CURRENT_FILE_VERSION = 3
+        private const val CURRENT_FILE_VERSION = 4
         private const val MAX_POINT_COUNT = 2_000_000
         private const val REQUEST_FILE = "pending-video-export.bin"
         private const val TEMPORARY_FILE = "pending-video-export.tmp"

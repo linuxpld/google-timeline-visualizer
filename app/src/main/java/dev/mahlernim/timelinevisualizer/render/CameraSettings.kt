@@ -1,38 +1,26 @@
 package dev.mahlernim.timelinevisualizer.render
 
-enum class RouteContext(val fraction: Double) {
-    COMPACT(0.02),
-    BALANCED(0.05),
-    GENEROUS(0.08),
-    MAXIMUM(0.10),
-}
-
-enum class LocalFraming(
+enum class CameraMovement(
+    val contextFraction: Double,
+    val minimumContextKm: Double,
+    val maximumContextKm: Double,
     val padding: Double,
     val minimumViewportSpan: Double,
+    val zoomOutAlpha: Double,
+    val zoomInAlpha: Double,
+    val legAware: Boolean,
+    val fixedZoom: Boolean,
 ) {
-    DETAILED(1.8, 0.00030),
-    BALANCED(2.2, 0.00045),
-    WIDE(2.6, 0.00060),
-}
-
-enum class ZoomInSmoothness(val halfDistanceKm: Double) {
-    QUICK(25.0),
-    GENTLE(50.0),
-    CINEMATIC(80.0),
-}
-
-enum class LongHopSensitivity(val thresholdMultiplier: Double) {
-    MORE_SENSITIVE(0.67),
-    AUTOMATIC(1.0),
-    LESS_SENSITIVE(1.5),
+    FIXED(0.10, 25.0, 350.0, 2.6, 0.00060, 0.0, 0.0, false, true),
+    STEADY(0.20, 100.0, 650.0, 2.8, 0.00060, 0.025, 0.018, false, false),
+    DYNAMIC(0.05, 1.0, 250.0, 2.2, 0.00045, 0.16, 0.06, true, false),
 }
 
 enum class LongTripCompression(val exponent: Double) {
     OFF(1.00),
-    GENTLE(0.85),
-    BALANCED(0.75),
-    STRONG(0.60),
+    GENTLE(0.92),
+    BALANCED(0.85),
+    STRONG(0.75),
 }
 
 enum class VideoQuality(
@@ -45,18 +33,11 @@ enum class VideoQuality(
 }
 
 data class CameraSettings(
-    val routeContext: RouteContext = RouteContext.BALANCED,
-    val localFraming: LocalFraming = LocalFraming.BALANCED,
-    val zoomInSmoothness: ZoomInSmoothness = ZoomInSmoothness.GENTLE,
-    val longHopSensitivity: LongHopSensitivity = LongHopSensitivity.AUTOMATIC,
+    val cameraMovement: CameraMovement = CameraMovement.STEADY,
     val longTripCompression: LongTripCompression = LongTripCompression.BALANCED,
     val videoQuality: VideoQuality = VideoQuality.STANDARD,
 ) {
     companion object {
         val DEFAULT = CameraSettings()
-        const val MIN_LOCAL_CONTEXT_KM = 1.0
-        const val MAX_LOCAL_CONTEXT_KM = 250.0
-        const val MIN_TRANSFER_THRESHOLD_KM = 40.0
-        const val MAX_TRANSFER_THRESHOLD_KM = 180.0
     }
 }

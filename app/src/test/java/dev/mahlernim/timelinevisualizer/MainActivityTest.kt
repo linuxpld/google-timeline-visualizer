@@ -227,8 +227,8 @@ class MainActivityTest {
         activity.findViewById<View>(R.id.advancedSettingsButton).performClick()
         assertEquals(View.VISIBLE, group.visibility)
         assertEquals(
-            activity.getString(R.string.route_context_balanced),
-            activity.findViewById<AutoCompleteTextView>(R.id.routeContextDropdown).text.toString(),
+            activity.getString(R.string.camera_steady),
+            activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
         assertEquals(
             activity.getString(R.string.compression_balanced),
@@ -248,6 +248,31 @@ class MainActivityTest {
         assertEquals(View.GONE, button.visibility)
         activity.findViewById<View>(R.id.exactDateSwitch).performClick()
         assertEquals(View.VISIBLE, button.visibility)
+    }
+
+    @Test
+    fun deleteAllVideosRequiresConfirmation() {
+        store.upsert(
+            VideoRecord(
+                uri = "content://example/video",
+                title = "Trip",
+                fileName = "trip.mp4",
+                createdAtMillis = 1L,
+                durationSeconds = 30,
+            ),
+        )
+        val activity = launchActivity()
+        val deleteAll = activity.findViewById<View>(R.id.deleteAllVideosButton)
+
+        assertEquals(View.VISIBLE, deleteAll.visibility)
+        deleteAll.performClick()
+
+        val dialog = ShadowDialog.getLatestDialog()
+        assertTrue(dialog.isShowing)
+        assertEquals(
+            activity.getString(R.string.delete_all_videos_title),
+            dialog.findViewById<TextView>(com.google.android.material.R.id.alertTitle).text.toString(),
+        )
     }
 
     @Test

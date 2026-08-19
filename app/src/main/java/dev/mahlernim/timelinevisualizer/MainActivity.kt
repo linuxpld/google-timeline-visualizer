@@ -54,12 +54,9 @@ import dev.mahlernim.timelinevisualizer.model.TitleTemplate
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.RenderText
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
-import dev.mahlernim.timelinevisualizer.render.LocalFraming
-import dev.mahlernim.timelinevisualizer.render.LongHopSensitivity
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
 import dev.mahlernim.timelinevisualizer.render.LongTripCompression
-import dev.mahlernim.timelinevisualizer.render.RouteContext
 import dev.mahlernim.timelinevisualizer.render.VideoQuality
-import dev.mahlernim.timelinevisualizer.render.ZoomInSmoothness
 import dev.mahlernim.timelinevisualizer.ui.CameraSettingsPreferences
 import dev.mahlernim.timelinevisualizer.videos.GeneratedMediaRepository
 import dev.mahlernim.timelinevisualizer.videos.VideoMedia
@@ -191,6 +188,7 @@ class MainActivity : AppCompatActivity() {
             videosExpanded = !videosExpanded
             renderVideos()
         }
+        home.deleteAllVideosButton.setOnClickListener { confirmDeleteAllVideos() }
         home.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
         home.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
         home.checkUpdatesButton.setOnClickListener { openUpdates() }
@@ -642,26 +640,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun configureAdvancedSettings() {
-        val routeLabels = listOf(
-            R.string.route_context_compact,
-            R.string.route_context_balanced,
-            R.string.route_context_generous,
-            R.string.route_context_maximum,
-        ).map(::getString)
-        val framingLabels = listOf(
-            R.string.framing_detailed,
-            R.string.framing_balanced,
-            R.string.framing_wide,
-        ).map(::getString)
-        val zoomLabels = listOf(
-            R.string.zoom_quick,
-            R.string.zoom_gentle,
-            R.string.zoom_cinematic,
-        ).map(::getString)
-        val hopLabels = listOf(
-            R.string.hop_more_sensitive,
-            R.string.hop_automatic,
-            R.string.hop_less_sensitive,
+        val cameraLabels = listOf(
+            R.string.camera_fixed,
+            R.string.camera_steady,
+            R.string.camera_dynamic,
         ).map(::getString)
         val compressionLabels = listOf(
             R.string.compression_off,
@@ -676,10 +658,7 @@ class MainActivity : AppCompatActivity() {
         ).map(::getString)
 
         listOf(
-            editor.routeContextDropdown to routeLabels,
-            editor.localFramingDropdown to framingLabels,
-            editor.zoomInDropdown to zoomLabels,
-            editor.longHopDropdown to hopLabels,
+            editor.cameraMovementDropdown to cameraLabels,
             editor.longTripDropdown to compressionLabels,
             editor.videoQualityDropdown to qualityLabels,
         ).forEach { (dropdown, labels) ->
@@ -687,17 +666,8 @@ class MainActivity : AppCompatActivity() {
             makeDropdownOpenReliably(dropdown)
         }
 
-        editor.routeContextDropdown.setOnItemClickListener { _, _, position, _ ->
-            updateAdvancedSettings(cameraSettings.copy(routeContext = RouteContext.values()[position]))
-        }
-        editor.localFramingDropdown.setOnItemClickListener { _, _, position, _ ->
-            updateAdvancedSettings(cameraSettings.copy(localFraming = LocalFraming.values()[position]))
-        }
-        editor.zoomInDropdown.setOnItemClickListener { _, _, position, _ ->
-            updateAdvancedSettings(cameraSettings.copy(zoomInSmoothness = ZoomInSmoothness.values()[position]))
-        }
-        editor.longHopDropdown.setOnItemClickListener { _, _, position, _ ->
-            updateAdvancedSettings(cameraSettings.copy(longHopSensitivity = LongHopSensitivity.values()[position]))
+        editor.cameraMovementDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(cameraMovement = CameraMovement.values()[position]))
         }
         editor.longTripDropdown.setOnItemClickListener { _, _, position, _ ->
             updateAdvancedSettings(cameraSettings.copy(longTripCompression = LongTripCompression.values()[position]))
@@ -727,27 +697,10 @@ class MainActivity : AppCompatActivity() {
     private fun applyAdvancedSettings(settings: CameraSettings) {
         cameraSettings = settings
         editor.timelineView.cameraSettings = settings
-        editor.routeContextDropdown.setText(
+        editor.cameraMovementDropdown.setText(
             getString(
-                listOf(
-                    R.string.route_context_compact,
-                    R.string.route_context_balanced,
-                    R.string.route_context_generous,
-                    R.string.route_context_maximum,
-                )[settings.routeContext.ordinal],
+                listOf(R.string.camera_fixed, R.string.camera_steady, R.string.camera_dynamic)[settings.cameraMovement.ordinal],
             ),
-            false,
-        )
-        editor.localFramingDropdown.setText(
-            getString(listOf(R.string.framing_detailed, R.string.framing_balanced, R.string.framing_wide)[settings.localFraming.ordinal]),
-            false,
-        )
-        editor.zoomInDropdown.setText(
-            getString(listOf(R.string.zoom_quick, R.string.zoom_gentle, R.string.zoom_cinematic)[settings.zoomInSmoothness.ordinal]),
-            false,
-        )
-        editor.longHopDropdown.setText(
-            getString(listOf(R.string.hop_more_sensitive, R.string.hop_automatic, R.string.hop_less_sensitive)[settings.longHopSensitivity.ordinal]),
             false,
         )
         editor.longTripDropdown.setText(
@@ -936,6 +889,7 @@ class MainActivity : AppCompatActivity() {
         editor.exportProgress.visibility = if (exporting) View.VISIBLE else View.GONE
         editor.cancelExportButton.visibility = if (exporting) View.VISIBLE else View.GONE
         home.createVideoButton.isEnabled = !exporting
+        home.deleteAllVideosButton.isEnabled = !exporting
         editor.importButton.isEnabled = !exporting
         editor.playButton.isEnabled = !exporting && canCreate
         editor.exportButton.isEnabled = !exporting && canCreate
@@ -956,10 +910,7 @@ class MainActivity : AppCompatActivity() {
         editor.ownerInput.isEnabled = !exporting
         editor.titleInput.isEnabled = !exporting
         editor.advancedSettingsButton.isEnabled = !exporting
-        editor.routeContextDropdown.isEnabled = !exporting
-        editor.localFramingDropdown.isEnabled = !exporting
-        editor.zoomInDropdown.isEnabled = !exporting
-        editor.longHopDropdown.isEnabled = !exporting
+        editor.cameraMovementDropdown.isEnabled = !exporting
         editor.longTripDropdown.isEnabled = !exporting
         editor.videoQualityDropdown.isEnabled = !exporting
         editor.resetAdvancedSettingsButton.isEnabled = !exporting
@@ -1020,6 +971,7 @@ class MainActivity : AppCompatActivity() {
         val generation = ++videoRenderGeneration
         home.emptyVideosText.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
         home.showAllVideosButton.visibility = if (records.size > COLLAPSED_CREATION_COUNT) View.VISIBLE else View.GONE
+        home.deleteAllVideosButton.visibility = if (records.isEmpty()) View.GONE else View.VISIBLE
         home.showAllVideosButton.text = if (videosExpanded) {
             getString(R.string.show_fewer_videos)
         } else {
@@ -1145,6 +1097,51 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(R.string.delete) { _, _ -> deleteVideo(record) }
             .show()
+    }
+
+    private fun confirmDeleteAllVideos() {
+        val records = videoStore.list()
+        if (records.isEmpty()) return
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.delete_all_videos_title)
+            .setMessage(R.string.delete_all_videos_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.delete_all_videos) { _, _ -> deleteAllVideos(records) }
+            .show()
+    }
+
+    private fun deleteAllVideos(records: List<VideoRecord>) {
+        home.deleteAllVideosButton.isEnabled = false
+        lifecycleScope.launch {
+            val deleted = withContext(Dispatchers.IO) {
+                records.filter { record ->
+                    val uri = record.uri.toUri()
+                    val removed = videoMedia.delete(uri)
+                    if (removed) {
+                        videoMedia.deleteThumbnail(uri)
+                        videoMedia.deleteOverview(uri)
+                    }
+                    removed
+                }
+            }
+            videoStore.removeAll(deleted.mapTo(mutableSetOf(), VideoRecord::uri))
+            deleted.forEach { record ->
+                releaseUriAccess(record.uri.toUri())
+                if (lastVideoUri?.toString() == record.uri) lastVideoUri = null
+            }
+            renderVideos()
+            home.deleteAllVideosButton.isEnabled = true
+            val failed = records.size - deleted.size
+            Snackbar.make(
+                binding.root,
+                if (failed == 0) {
+                    getString(R.string.all_videos_deleted)
+                } else {
+                    getString(R.string.some_videos_not_deleted, deleted.size, failed)
+                },
+                Snackbar.LENGTH_LONG,
+            ).show()
+        }
     }
 
     private fun deleteVideo(record: VideoRecord) {
